@@ -1,8 +1,9 @@
-# tests/test_gitlab_client.py
+# tests/integration/test_gitlab_client.py
 import pytest
 from ai_review.platforms.gitlab import GitLabClient
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_mr_changes(httpx_mock):
     httpx_mock.add_response(
@@ -30,6 +31,7 @@ async def test_get_mr_changes(httpx_mock):
     assert changes["changes"][0]["new_path"] == "src/main.py"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_file_content(httpx_mock):
     httpx_mock.add_response(
@@ -47,6 +49,7 @@ async def test_get_file_content(httpx_mock):
     assert content == "print('hello world')"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_post_inline_comment(httpx_mock):
     httpx_mock.add_response(

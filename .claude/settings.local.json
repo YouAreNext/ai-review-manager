@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager status)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager diff)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager log --oneline -5)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager add pyproject.toml src/ tests/)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager commit -m \"$\\(cat <<''EOF''\nfeat: project setup with health endpoint\n\nInitialize FastAPI project structure with:\n- pyproject.toml with dependencies \\(fastapi, uvicorn, httpx, pydantic, etc.\\)\n- src/ai_review/ package layout using hatch build system\n- Health endpoint returning status and version\n- Test infrastructure with pytest-asyncio\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager rm:*)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager add .gitignore src/ tests/)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager commit --amend -m \"$\\(cat <<''EOF''\nfeat: project setup with health endpoint\n\nInitialize FastAPI project structure with:\n- pyproject.toml with dependencies \\(fastapi, uvicorn, httpx, pydantic, etc.\\)\n- src/ai_review/ package layout using hatch build system\n- Health endpoint returning status and version\n- Test infrastructure with pytest-asyncio\n- .gitignore for Python projects\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(python -m pytest:*)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager add src/ai_review/config.py tests/test_config.py)",
+      "Bash(git -C /Users/kirillivanov/Documents/projects/ai-review-manager commit -m \"$\\(cat <<''EOF''\nfeat: add configuration with pydantic-settings\n\nAdd Settings class for managing application configuration from environment\nvariables and .env files. Includes settings for GitLab integration, LLM\nproviders \\(Gemini, Yandex\\), and default application settings.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

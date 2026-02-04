@@ -1,6 +1,7 @@
 # src/ai_review/review/engine.py
 import yaml
 import logging
+from dataclasses import dataclass
 from ai_review.platforms.gitlab import GitLabClient
 from ai_review.providers.base import LLMProvider
 from ai_review.models.config import RepoConfig, Severity
@@ -10,6 +11,13 @@ from .prompts import build_review_prompt
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class EngineReviewResult:
+    """Result of running review on a merge request."""
+    comments_count: int
+    summary: str
 
 SEVERITY_ORDER = {
     Severity.LOW: 0,
@@ -29,7 +37,7 @@ class ReviewEngine:
         project_id: int,
         mr_iid: int,
         source_branch: str,
-    ) -> None:
+    ) -> EngineReviewResult:
         """Run AI review on a merge request."""
         # Get MR changes
         mr_data = await self.gitlab.get_mr_changes(project_id, mr_iid)
@@ -96,9 +104,15 @@ class ReviewEngine:
                 logger.error(f"Failed to post comment: {e}")
 
         # Post summary
+        summary_text = ""
         if summaries:
             summary_text = "## AI Review Summary\n\n" + "\n\n".join(summaries)
             await self.gitlab.post_summary_comment(project_id, mr_iid, summary_text)
+
+        return EngineReviewResult(
+            comments_count=len(all_comments),
+            summary=summary_text,
+        )
 
     async def _load_config(self, project_id: int, ref: str) -> RepoConfig:
         """Load .ai-review.yaml from repo or use defaults."""

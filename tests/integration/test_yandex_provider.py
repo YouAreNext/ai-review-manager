@@ -1,8 +1,9 @@
-# tests/test_yandex_provider.py
+# tests/integration/test_yandex_provider.py
 import pytest
 from ai_review.providers.yandex import YandexProvider
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_yandex_provider_builds_request(httpx_mock):
     httpx_mock.add_response(

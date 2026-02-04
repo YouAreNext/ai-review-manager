@@ -1,10 +1,11 @@
-# tests/test_webhook.py
+# tests/integration/test_webhook.py
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch
 from ai_review.main import app
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_webhook_rejects_invalid_token():
     transport = ASGITransport(app=app)
@@ -23,6 +24,7 @@ async def test_webhook_rejects_invalid_token():
     assert response.status_code == 401
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_webhook_accepts_mr_event():
     transport = ASGITransport(app=app)
@@ -56,6 +58,7 @@ async def test_webhook_accepts_mr_event():
     assert response.json()["status"] == "accepted"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_webhook_triggers_on_review_command():
     transport = ASGITransport(app=app)

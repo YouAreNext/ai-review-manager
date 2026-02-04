@@ -30,3 +30,9 @@ packages = ["src/ai_review"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (mocked HTTP)",
+    "e2e: End-to-end tests (real API calls, requires credentials)",
+]
+addopts = "-m 'not e2e'"

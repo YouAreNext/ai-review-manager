@@ -86,3 +86,26 @@ class GitLabClient(GitPlatform):
                 timeout=30.0,
             )
             response.raise_for_status()
+
+    async def get_project_by_path(self, path: str) -> dict[str, Any]:
+        """Get project info by path (e.g., 'user/repo')."""
+        encoded_path = quote(path, safe="")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url}/projects/{encoded_path}",
+                headers=self._headers(),
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_mr_info(self, project_id: int, mr_iid: int) -> dict[str, Any]:
+        """Get MR info including source_branch."""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url}/projects/{project_id}/merge_requests/{mr_iid}",
+                headers=self._headers(),
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return response.json()
