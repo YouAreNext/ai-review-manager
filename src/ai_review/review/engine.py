@@ -1,7 +1,10 @@
 # src/ai_review/review/engine.py
+import re
 import yaml
 import logging
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from ai_review.platforms.gitlab import GitLabClient
 from ai_review.providers.base import LLMProvider
 from ai_review.models.config import RepoConfig, Severity
@@ -28,15 +31,20 @@ SEVERITY_ORDER = {
 
 
 class ReviewEngine:
-    def __init__(self, gitlab: GitLabClient, provider: LLMProvider):
+    def __init__(self, gitlab: GitLabClient, provider: LLMProvider, reviewer_name: str = "AI Review", log_dir: str | None = None):
         self.gitlab = gitlab
         self.provider = provider
+        self.reviewer_name = reviewer_name
+        self.log_dir = Path(log_dir) if log_dir else None
+        if self.log_dir:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
 
     async def review_mr(
         self,
         project_id: int,
         mr_iid: int,
         source_branch: str,
+        mr_description: str = "",
     ) -> EngineReviewResult:
         """Run AI review on a merge request."""
         # Get MR changes
@@ -49,6 +57,7 @@ class ReviewEngine:
 
         all_comments: list[tuple[str, ReviewComment]] = []
         summaries: list[str] = []
+        prompt_logs: list[str] = []
 
         for change in changes:
             file_path = change["new_path"]
@@ -72,7 +81,10 @@ class ReviewEngine:
                 file_content=file_content,
                 diff_content=change["diff"],
                 config=config,
+                mr_description=mr_description,
             )
+
+            prompt_logs.append(self._strip_file_content(file_path, prompt))
 
             try:
                 result = await self.provider.review(prompt)
@@ -87,6 +99,8 @@ class ReviewEngine:
 
             if result.summary:
                 summaries.append(f"**{file_path}**: {result.summary}")
+
+        self._save_review_log(project_id, mr_iid, prompt_logs)
 
         # Post inline comments
         for file_path, comment in all_comments:
@@ -106,7 +120,7 @@ class ReviewEngine:
         # Post summary
         summary_text = ""
         if summaries:
-            summary_text = "## AI Review Summary\n\n" + "\n\n".join(summaries)
+            summary_text = f"## {self.reviewer_name} Summary\n\n" + "\n\n".join(summaries)
             await self.gitlab.post_summary_comment(project_id, mr_iid, summary_text)
 
         return EngineReviewResult(
@@ -139,6 +153,31 @@ class ReviewEngine:
         """Check if comment severity meets threshold."""
         return SEVERITY_ORDER[severity] >= SEVERITY_ORDER[threshold]
 
+    def _strip_file_content(self, file_path: str, prompt: str) -> str:
+        """Strip file content from prompt, keep everything else."""
+        stripped = re.sub(
+            r"(Full file with line numbers:\n```\n).*?(\n```)",
+            r"\1[file content omitted]\2",
+            prompt,
+            flags=re.DOTALL,
+        )
+        return f"{'=' * 60}\nFILE: {file_path}\n{'=' * 60}\n\n{stripped}"
+
+    def _save_review_log(self, project_id: int, mr_iid: int, prompt_logs: list[str]) -> None:
+        """Save all prompts from one review run into a single log file."""
+        if not self.log_dir or not prompt_logs:
+            return
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{timestamp}_mr{mr_iid}.txt"
+            log_path = self.log_dir / filename
+
+            header = f"Review: project={project_id} mr=!{mr_iid}\nTime: {timestamp}\nFiles: {len(prompt_logs)}\n\n"
+            log_path.write_text(header + "\n\n".join(prompt_logs), encoding="utf-8")
+            logger.info(f"Review log saved: {log_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save review log: {e}")
+
     def _format_comment(self, comment: ReviewComment) -> str:
         """Format comment for GitLab."""
         emoji = {
@@ -147,4 +186,5 @@ class ReviewEngine:
             Severity.MEDIUM: "💡",
             Severity.LOW: "ℹ️",
         }
-        return f"{emoji[comment.severity]} **{comment.category.value}** | `{comment.severity.value}`\n\n{comment.comment}"
+        header = f"**{self.reviewer_name}** | {emoji[comment.severity]} **{comment.category.value}** | `{comment.severity.value}`"
+        return f"{header}\n\n{comment.comment}"

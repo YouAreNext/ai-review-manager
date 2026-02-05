@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     # GitLab
+    gitlab_url: str = "https://gitlab.com"
     gitlab_token: str
     gitlab_webhook_secret: str
 
@@ -17,4 +18,6 @@ class Settings(BaseSettings):
     # Defaults
     default_provider: str = "gemini"
     default_language: str = "en"
+    reviewer_name: str = "AI Review"
+    log_dir: str | None = None
     log_level: str = "INFO"

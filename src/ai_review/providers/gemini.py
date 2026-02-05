@@ -7,7 +7,7 @@ from ai_review.models.review import ReviewResult
 
 
 class GeminiProvider(LLMProvider):
-    API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -28,8 +28,8 @@ class GeminiProvider(LLMProvider):
         data = response.json()
         text = data["candidates"][0]["content"]["parts"][0]["text"]
 
-        # Extract JSON from response (may be wrapped in ```json)
-        json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+        # Extract JSON from response (may be wrapped in ```json or just ```)
+        json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
         if json_match:
             text = json_match.group(1)
 

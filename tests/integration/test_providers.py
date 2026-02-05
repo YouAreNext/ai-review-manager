@@ -7,7 +7,7 @@ from ai_review.providers.gemini import GeminiProvider
 @pytest.mark.asyncio
 async def test_gemini_provider_builds_request(httpx_mock):
     httpx_mock.add_response(
-        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=test-key",
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=test-key",
         json={
             "candidates": [{
                 "content": {

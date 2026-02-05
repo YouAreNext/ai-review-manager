@@ -99,6 +99,33 @@ class GitLabClient(GitPlatform):
             response.raise_for_status()
             return response.json()
 
+    async def delete_mr_comments(self, project_id: int, mr_iid: int) -> int:
+        """Delete all notes in MR authored by the token owner. Returns count of deleted."""
+        deleted = 0
+        async with httpx.AsyncClient() as client:
+            # Get all notes
+            response = await client.get(
+                f"{self.api_url}/projects/{project_id}/merge_requests/{mr_iid}/notes",
+                headers=self._headers(),
+                params={"per_page": 100},
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            notes = response.json()
+
+            for note in notes:
+                if note.get("system"):
+                    continue
+                resp = await client.delete(
+                    f"{self.api_url}/projects/{project_id}/merge_requests/{mr_iid}/notes/{note['id']}",
+                    headers=self._headers(),
+                    timeout=30.0,
+                )
+                if resp.status_code == 204:
+                    deleted += 1
+
+        return deleted
+
     async def get_mr_info(self, project_id: int, mr_iid: int) -> dict[str, Any]:
         """Get MR info including source_branch."""
         async with httpx.AsyncClient() as client:

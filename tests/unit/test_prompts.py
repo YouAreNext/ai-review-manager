@@ -12,7 +12,8 @@ def test_build_prompt_includes_file_content():
     )
 
     assert "src/main.py" in prompt
-    assert "def hello():" in prompt
+    assert "1| def hello():" in prompt
+    assert "2|     print('hello')" in prompt
     assert "+ print('world')" in prompt
 
 

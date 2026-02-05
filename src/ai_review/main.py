@@ -136,7 +136,7 @@ async def gitlab_webhook(
 async def trigger_review(request: ReviewRequest):
     """Manually trigger a review for a merge request."""
     settings = get_settings()
-    gitlab = GitLabClient(token=settings.gitlab_token)
+    gitlab = GitLabClient(token=settings.gitlab_token, base_url=settings.gitlab_url)
 
     try:
         # Resolve project_id and mr_iid
@@ -148,9 +148,10 @@ async def trigger_review(request: ReviewRequest):
             project_id = request.project_id
             mr_iid = request.mr_iid
 
-        # Get MR info for source_branch
+        # Get MR info for source_branch and description
         mr_info = await gitlab.get_mr_info(project_id, mr_iid)
         source_branch = mr_info["source_branch"]
+        mr_description = mr_info.get("description", "") or ""
 
         # Get provider
         provider = get_provider(settings)
@@ -161,11 +162,12 @@ async def trigger_review(request: ReviewRequest):
             )
 
         # Run review
-        engine = ReviewEngine(gitlab=gitlab, provider=provider)
+        engine = ReviewEngine(gitlab=gitlab, provider=provider, reviewer_name=settings.reviewer_name, log_dir=settings.log_dir)
         result = await engine.review_mr(
             project_id=project_id,
             mr_iid=mr_iid,
             source_branch=source_branch,
+            mr_description=mr_description,
         )
 
         return ReviewResponse(
@@ -183,23 +185,68 @@ async def trigger_review(request: ReviewRequest):
         return ReviewResponse(status="error", error=str(e))
 
 
+class CleanupRequest(BaseModel):
+    url: str | None = None
+    project_id: int | None = None
+    mr_iid: int | None = None
+
+    @model_validator(mode="after")
+    def check_params(self):
+        if not self.url and not (self.project_id and self.mr_iid):
+            raise ValueError("Either url or project_id+mr_iid required")
+        return self
+
+
+@app.post("/api/cleanup")
+async def cleanup_comments(request: CleanupRequest):
+    """Delete all bot comments from a merge request."""
+    settings = get_settings()
+    gitlab = GitLabClient(token=settings.gitlab_token, base_url=settings.gitlab_url)
+
+    try:
+        if request.url:
+            project_path, mr_iid = parse_gitlab_mr_url(request.url)
+            project = await gitlab.get_project_by_path(project_path)
+            project_id = project["id"]
+        else:
+            project_id = request.project_id
+            mr_iid = request.mr_iid
+
+        deleted = await gitlab.delete_mr_comments(project_id, mr_iid)
+
+        return {
+            "status": "completed",
+            "project_id": project_id,
+            "mr_iid": mr_iid,
+            "deleted_comments": deleted,
+        }
+
+    except Exception as e:
+        logger.exception(f"Cleanup failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 async def run_review(project_id: int, mr_iid: int, source_branch: str):
     """Background task to run the review."""
     settings = get_settings()
-    gitlab = GitLabClient(token=settings.gitlab_token)
+    gitlab = GitLabClient(token=settings.gitlab_token, base_url=settings.gitlab_url)
 
     provider = get_provider(settings)
     if not provider:
         logger.error("No LLM provider configured")
         return
 
-    engine = ReviewEngine(gitlab=gitlab, provider=provider)
+    engine = ReviewEngine(gitlab=gitlab, provider=provider, reviewer_name=settings.reviewer_name)
 
     try:
+        mr_info = await gitlab.get_mr_info(project_id, mr_iid)
+        mr_description = mr_info.get("description", "") or ""
+
         await engine.review_mr(
             project_id=project_id,
             mr_iid=mr_iid,
             source_branch=source_branch,
+            mr_description=mr_description,
         )
         logger.info(f"Review completed for MR !{mr_iid}")
     except Exception as e:

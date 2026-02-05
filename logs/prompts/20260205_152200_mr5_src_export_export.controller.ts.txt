@@ -1,0 +1,171 @@
+You are an AI code reviewer. Analyze the code changes for the following categories: bugs, security, performance, readability, best-practices, logic.
+
+Respond in language: en.
+
+Return ONLY valid JSON in this exact format:
+{
+  "comments": [
+    {
+      "line": <line number in the NEW file>,
+      "severity": "critical|high|medium|low",
+      "category": "bugs|security|performance|readability|best-practices|logic",
+      "comment": "<your comment text>"
+    }
+  ],
+  "summary": "<2-3 sentence summary of the changes>"
+}
+
+Important:
+- Only comment on the changed lines (from the diff)
+- Use EXACTLY the line numbers shown in the numbered file listing (the number before the | symbol)
+- Be specific and actionable in your comments
+- If the code looks good, return empty comments array
+
+Task description review (category: "logic"):
+If a task description is provided, you MUST carefully compare the implementation against the requirements.
+Check for:
+- Missing requirements: features described but not implemented
+- Incorrect logic: code that does something different from what the description specifies
+- Edge cases: scenarios mentioned in the description but not handled in code
+- Contradictions: code behavior that conflicts with the described requirements
+Use category "logic" and severity "high" or "critical" for these issues.
+
+File: src/export/export.controller.ts
+
+
+Task description (from MR):
+```
+# PRD: Task Export
+
+## Overview
+
+Allow users to export their tasks in different formats for reporting and backup purposes.
+
+## Functional Requirements
+
+### Export Tasks (Download)
+
+- Authenticated users can export their own tasks
+- Supported formats: `json`, `csv`
+- Response is returned as a file download with appropriate Content-Type and Content-Disposition headers
+
+### Export to File
+
+- Users can trigger a server-side export that saves results to a file
+- Accepts `filename` and `format` query parameters
+- Returns the resulting file path
+
+### Export Status
+
+- Users can check if an export is currently in progress for their account
+
+### Batch Export
+
+- Accepts a comma-separated list of user IDs via `userIds` query parameter
+- Exports data only for the currently authenticated user (the `userIds` parameter is validated to ensure users can only export their own data)
+- Returns the count of exported datasets
+
+## API Endpoints
+
+
+| Method | Path            | Description                  |
+| ------ | --------------- | ---------------------------- |
+| GET    | /export/tasks   | Download tasks as file       |
+| POST   | /export/to-file | Export tasks to server file  |
+| GET    | /export/status  | Check export status          |
+| POST   | /export/batch   | Batch export for user's data |
+```
+
+Full file with line numbers:
+```
+[file content omitted]
+```
+
+Changes (diff):
+```diff
+@@ -0,0 +1,81 @@
++import {
++  Controller,
++  Get,
++  Post,
++  Query,
++  UseGuards,
++  Res,
++  Req,
++} from '@nestjs/common';
++import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
++import type { Response } from 'express';
++import { ExportService } from './export.service';
++import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
++
++@ApiTags('export')
++@ApiBearerAuth()
++@UseGuards(JwtAuthGuard)
++@Controller('export')
++export class ExportController {
++  constructor(private readonly exportService: ExportService) {}
++
++  @Get('tasks')
++  async exportTasks(
++    @Query('format') format: string,
++    @Req() req: any,
++    @Res() res: Response,
++  ): Promise<void> {
++    const userId = req.user.id;
++
++    let content: string;
++    let contentType: string;
++    let filename: string;
++
++    if (format === 'csv') {
++      content = await this.exportService.generateCsvExport(userId);
++      contentType = 'text/csv';
++      filename = 'tasks.csv';
++    } else {
++      content = await this.exportService.generateJsonExport(userId);
++      contentType = 'application/json';
++      filename = 'tasks.json';
++    }
++
++    res.setHeader('Content-Type', contentType);
++    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
++    res.send(content);
++  }
++
++  @Post('to-file')
++  async exportToFile(
++    @Query('filename') filename: string,
++    @Query('format') format: string,
++    @Req() req: any,
++  ): Promise<{ filepath: string }> {
++    const userId = req.user.id;
++
++    const filepath = await this.exportService.exportTasksToFile(
++      userId,
++      filename || 'export.json',
++      format || 'json',
++    );
++
++    return { filepath };
++  }
++
++  @Get('status')
++  async getStatus(@Req() req: any): Promise<{ inProgress: boolean }> {
++    return this.exportService.getExportStatus(req.user.id);
++  }
++
++  @Post('batch')
++  async batchExport(@Query('userIds') userIds: string): Promise<{ count: number }> {
++    const ids = userIds.split(',').map(id => parseInt(id));
++
++    console.log('Batch export requested for users:', ids);
++
++    const results = await this.exportService.batchExport(ids);
++
++    return { count: results.length };
++  }
++}
+
+```
+
+Review the changes and respond with JSON. Use the line numbers shown above.

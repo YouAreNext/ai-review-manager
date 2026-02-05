@@ -1,0 +1,236 @@
+You are an AI code reviewer. Analyze the code changes for the following categories: bugs, security, performance, readability, best-practices, logic.
+
+Respond in language: en.
+
+Return ONLY valid JSON in this exact format:
+{
+  "comments": [
+    {
+      "line": <line number in the NEW file>,
+      "severity": "critical|high|medium|low",
+      "category": "bugs|security|performance|readability|best-practices|logic",
+      "comment": "<your comment text>"
+    }
+  ],
+  "summary": "<2-3 sentence summary of the changes>"
+}
+
+Important:
+- Only comment on the changed lines (from the diff)
+- Use EXACTLY the line numbers shown in the numbered file listing (the number before the | symbol)
+- Be specific and actionable in your comments
+- If the code looks good, return empty comments array
+
+Task description review (category: "logic"):
+If a task description is provided, you MUST carefully compare the implementation against the requirements.
+Check for:
+- Missing requirements: features described but not implemented
+- Incorrect logic: code that does something different from what the description specifies
+- Edge cases: scenarios mentioned in the description but not handled in code
+- Contradictions: code behavior that conflicts with the described requirements
+Use category "logic" and severity "high" or "critical" for these issues.
+
+File: src/export/export.service.ts
+
+
+Task description (from MR):
+```
+# PRD: Task Export
+
+## Overview
+
+Allow users to export their tasks in different formats for reporting and backup purposes.
+
+## Functional Requirements
+
+### Export Tasks (Download)
+
+- Authenticated users can export their own tasks
+- Supported formats: `json`, `csv`
+- Response is returned as a file download with appropriate Content-Type and Content-Disposition headers
+
+### Export to File
+
+- Users can trigger a server-side export that saves results to a file
+- Accepts `filename` and `format` query parameters
+- Returns the resulting file path
+
+### Export Status
+
+- Users can check if an export is currently in progress for their account
+
+### Batch Export
+
+- Accepts a comma-separated list of user IDs via `userIds` query parameter
+- Exports data only for the currently authenticated user (the `userIds` parameter is validated to ensure users can only export their own data)
+- Returns the count of exported datasets
+
+## API Endpoints
+
+
+| Method | Path            | Description                  |
+| ------ | --------------- | ---------------------------- |
+| GET    | /export/tasks   | Download tasks as file       |
+| POST   | /export/to-file | Export tasks to server file  |
+| GET    | /export/status  | Check export status          |
+| POST   | /export/batch   | Batch export for user's data |
+```
+
+Full file with line numbers:
+```
+[file content omitted]
+```
+
+Changes (diff):
+```diff
+@@ -0,0 +1,146 @@
++import { Injectable, ConflictException } from '@nestjs/common';
++import { InjectRepository } from '@nestjs/typeorm';
++import { Repository } from 'typeorm';
++import * as fs from 'fs';
++import * as path from 'path';
++import { Task } from '../tasks/entities/task.entity';
++import { User } from '../users/entities/user.entity';
++
++@Injectable()
++export class ExportService {
++  private exportsInProgress: Map<number, boolean> = new Map();
++
++  constructor(
++    @InjectRepository(Task)
++    private taskRepo: Repository<Task>,
++    @InjectRepository(User)
++    private userRepo: Repository<User>,
++  ) {}
++
++  async exportTasksToFile(userId: number, filename: string, format: string): Promise<string> {
++    if (this.exportsInProgress.get(userId)) {
++      throw new ConflictException('Export already in progress');
++    }
++    this.exportsInProgress.set(userId, true);
++
++    try {
++      const exportDir = './exports';
++      if (!fs.existsSync(exportDir)) {
++        fs.mkdirSync(exportDir);
++      }
++
++      const filepath = path.join(exportDir, filename);
++
++      const tasks = this.taskRepo.find({ where: { ownerId: userId } });
++
++      let content: string;
++      if (format === 'json') {
++        content = await this.generateJsonExport(userId);
++      } else if (format === 'csv') {
++        content = await this.generateCsvExport(userId);
++      } else {
++        content = await this.generateJsonExport(userId);
++      }
++
++      fs.writeFileSync(filepath, content);
++
++      return filepath;
++    } finally {
++      this.exportsInProgress.set(userId, false);
++    }
++  }
++
++  async generateJsonExport(userId: number): Promise<string> {
++    console.log('Starting JSON export for user: ' + userId);
++
++    const tasks = await this.taskRepo.find({
++      where: { ownerId: userId },
++      relations: ['owner'],
++    });
++
++    const exportData = {
++      exportedAt: new Date().toISOString(),
++      userId: userId,
++      tasksCount: tasks.length,
++      tasks: tasks.map(task => ({
++        id: task.id,
++        title: task.title,
++        description: task.description,
++        status: task.status,
++        priority: task.priority,
++        createdAt: task.createdAt,
++        owner: task.owner,
++      })),
++    };
++
++    return JSON.stringify(exportData, null, 2);
++  }
++
++  async generateCsvExport(userId: number): Promise<string> {
++    console.log('Starting CSV export for user: ' + userId);
++
++    const tasks = await this.taskRepo.find({
++      where: { ownerId: userId },
++      relations: ['owner'],
++    });
++
++    let csv = 'id,title,description,status,priority,createdAt,ownerEmail,ownerPassword\n';
++
++    for (let i = 0; i < tasks.length; i++) {
++      const task = tasks[i];
++      csv += `${task.id},${task.title},${task.description || ''},${task.status},${task.priority},${task.createdAt},${task.owner?.email || ''},${task.owner?.password || ''}\n`;
++    }
++
++    return csv;
++  }
++
++  async exportLargeDataset(userId: number, outputPath: string): Promise<void> {
++    console.log('Exporting large dataset...');
++
++    const stream = fs.createWriteStream(outputPath);
++
++    const tasks = await this.taskRepo.find({ where: { ownerId: userId } });
++
++    for (const task of tasks) {
++      await this.processTaskForExport(task);
++      stream.write(JSON.stringify(task) + '\n');
++
++      if (tasks.indexOf(task) % 100 === 0) {
++        console.log(`Processed ${tasks.indexOf(task)} tasks`);
++      }
++
++      if (task.title.length > 1000) {
++        throw new Error('Task title too long');
++      }
++    }
++
++    stream.end();
++  }
++
++  private async processTaskForExport(task: Task): Promise<Task> {
++    await new Promise(resolve => setTimeout(resolve, 10));
++    return task;
++  }
++
++  async getTasksForExport(userId: number) {
++    const tasks = this.taskRepo.find({ where: { ownerId: userId } });
++    return tasks;
++  }
++
++  async batchExport(userIds: number[]): Promise<string[]> {
++    const results: string[] = [];
++
++    for (const userId of userIds) {
++      const result = await this.generateJsonExport(userId);
++      results.push(result);
++
++      await new Promise(resolve => setTimeout(resolve, 500));
++    }
++
++    return results;
++  }
++
++  async getExportStatus(userId: number): Promise<{ inProgress: boolean }> {
++    return { inProgress: this.exportsInProgress.get(userId) || false };
++  }
++}
+
+```
+
+Review the changes and respond with JSON. Use the line numbers shown above.
